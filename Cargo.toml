@@ -1,0 +1,20 @@
+[package]
+name = "ik_creatures"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.86"
+bytemuck = { version = "1.17.0", features = ["derive"] }
+env_logger = "0.11.5"
+glam = "0.29.0"
+log = "0.4.22"
+pollster = "0.3.0"
+wgpu = "22.1.0"
+winit = "0.30.5"
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
