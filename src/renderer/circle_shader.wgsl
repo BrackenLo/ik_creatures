@@ -15,16 +15,20 @@ struct VertexIn {
     @location(0) vertex_pos: vec2<f32>,
     // Instance
     @location(1) pos: vec2<f32>,
-    @location(2) color: vec4<f32>,
-    @location(3) radius: f32,
+    @location(2) radius: f32,
+    @location(3) border_radius: f32,
+    @location(4) color: vec4<f32>,
+    @location(5) border_color: vec4<f32>,
 }
 
 struct VertexOut {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) pos: vec2<f32>,
     @location(1) center: vec2<f32>,
-    @location(2) color: vec4<f32>,
-    @location(3) radius: f32,
+    @location(2) radius: f32,
+    @location(3) border_radius: f32,
+    @location(4) color: vec4<f32>,
+    @location(5) border_color: vec4<f32>,
 }
 
 //====================================================================
@@ -33,7 +37,7 @@ struct VertexOut {
 fn vs_main(in: VertexIn) -> VertexOut {
     var out: VertexOut;
 
-    var vertex_pos = in.vertex_pos * in.radius + in.pos;
+    var vertex_pos = in.vertex_pos * (in.radius + in.border_radius * 2.) + in.pos;
 
     out.clip_position = 
         camera.projection * 
@@ -41,8 +45,12 @@ fn vs_main(in: VertexIn) -> VertexOut {
 
     out.pos = vertex_pos;
     out.center = in.pos;
-    out.color = in.color;
+
     out.radius = in.radius / 2.;
+    out.border_radius = in.border_radius;
+
+    out.color = in.color;
+    out.border_color = in.border_color;
 
     return out;
 }
@@ -51,11 +59,14 @@ fn vs_main(in: VertexIn) -> VertexOut {
 fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     let distance = distance(in.pos, in.center);
 
-    if distance > in.radius {
-        discard;
+    if distance < in.radius {
+        return in.color;
+    }
+    if distance <= in.radius + in.border_radius {
+        return in.border_color;
     }
 
-    return in.color;
+    discard;
 }
 
 //====================================================================

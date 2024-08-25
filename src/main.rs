@@ -172,8 +172,10 @@ impl App {
             &mut self.circles,
             &[RawInstance {
                 pos: [0., 0.],
-                color: [1., 0., 0., 1.],
-                radius: 1080.,
+                radius: 500.,
+                border_radius: 5.,
+                color: [1., 1., 1., 1.],
+                border_color: [0., 0., 0., 1.],
             }],
         );
 

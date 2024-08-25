@@ -39,15 +39,17 @@ pub const INDICES: [u16; 6] = [0, 1, 3, 0, 3, 2];
 #[derive(bytemuck::Pod, bytemuck::Zeroable, Clone, Copy)]
 pub struct RawInstance {
     pub pos: [f32; 2],
-    pub color: [f32; 4],
     pub radius: f32,
+    pub border_radius: f32,
+    pub color: [f32; 4],
+    pub border_color: [f32; 4],
     // hollow: bool, // TODO
 }
 
 impl Vertex for RawInstance {
     fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
-        const VERTEX_ATTRIBUTES: [wgpu::VertexAttribute; 3] = wgpu::vertex_attr_array![
-            1 => Float32x2, 2 => Float32x4, 3 => Float32,
+        const VERTEX_ATTRIBUTES: [wgpu::VertexAttribute; 5] = wgpu::vertex_attr_array![
+            1 => Float32x2, 2 => Float32, 3 => Float32, 4 => Float32x4, 5 => Float32x4,
         ];
 
         wgpu::VertexBufferLayout {
