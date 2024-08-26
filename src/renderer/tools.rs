@@ -18,7 +18,11 @@ pub trait Pipeline {
     fn new(core: &Core, uniques: &mut Uniques) -> Self
     where
         Self: Sized;
-    fn render(&mut self, pass: &mut wgpu::RenderPass, uniques: &Uniques);
+
+    fn resize(&mut self, core: &Core, width: u32, height: u32) {
+        let _ = (core, width, height);
+    }
+    fn render<'pass>(&'pass mut self, pass: &mut wgpu::RenderPass<'pass>, uniques: &Uniques);
 }
 
 pub trait PipelineUpdate<T> {

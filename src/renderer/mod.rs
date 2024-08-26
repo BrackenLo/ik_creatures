@@ -5,6 +5,7 @@ use tools::{Pipeline, PipelineUpdate};
 use uniques::{Camera, Uniques};
 
 pub mod circles;
+pub mod text;
 pub mod tools;
 pub mod uniques;
 
@@ -19,6 +20,16 @@ pub struct Core {
     queue: wgpu::Queue,
     surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
+}
+impl Core {
+    #[inline]
+    pub fn device(&self) -> &wgpu::Device {
+        &self.device
+    }
+    #[inline]
+    pub fn queue(&self) -> &wgpu::Queue {
+        &self.queue
+    }
 }
 
 impl Renderer {
@@ -80,6 +91,11 @@ impl Renderer {
     #[inline]
     pub fn create_pipeline<T: Pipeline>(&mut self) -> T {
         T::new(&self.core, &mut self.uniques)
+    }
+
+    #[inline]
+    pub fn resize_pipeline<T: Pipeline>(&self, pipeline: &mut T, width: u32, height: u32) {
+        pipeline.resize(&self.core, width, height);
     }
 
     #[inline]

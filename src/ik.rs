@@ -49,9 +49,9 @@ impl Node {
         let vector = self.pos - parent.pos;
         self.rotation = (-vector).to_angle();
 
-        // Vec2::from_angle(self.rotation);
+        let scaled = Vec2::from_angle(self.rotation) * parent.radius;
 
-        let scaled = vector.normalize_or(Vec2::ONE) * parent.radius;
+        // let scaled = vector.normalize_or(Vec2::ONE) * parent.radius;
         self.pos = scaled + parent.pos;
 
         // self.pos = parent.get_point(-self.rotation);

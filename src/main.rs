@@ -5,6 +5,7 @@ use ik_creatures::{
     ik::Node,
     renderer::{
         circles::{CirclePipeline, RawInstance},
+        text::{TextData, TextPipeline},
         uniques::OrthographicCamera,
         Renderer,
     },
@@ -102,6 +103,7 @@ pub struct App {
     window: Arc<winit::window::Window>,
     renderer: Renderer,
     circles: CirclePipeline,
+    text: TextPipeline,
 
     camera: OrthographicCamera,
     mouse_pos: Vec2,
@@ -120,6 +122,7 @@ impl App {
 
         let mut renderer = Renderer::new(window.clone()).block_on().unwrap();
         let circles = renderer.create_pipeline();
+        let text = renderer.create_pipeline();
 
         let camera = OrthographicCamera::default();
         renderer.update_camera(0, &camera);
@@ -136,6 +139,7 @@ impl App {
             window,
             renderer,
             circles,
+            text,
             camera,
             mouse_pos: Vec2::ZERO,
             mouse_vector: Vec2::ZERO,
@@ -187,6 +191,9 @@ impl App {
         self.camera.bottom = -half_height;
 
         self.renderer.update_camera(0, &self.camera);
+
+        self.renderer
+            .resize_pipeline(&mut self.text, size.width, size.height);
     }
 
     fn tick(&mut self) {
@@ -210,47 +217,43 @@ impl App {
             });
         }
 
-        let instances = self.nodes.iter().fold(Vec::new(), |mut acc, node| {
-            acc.push(RawInstance::new(node.pos.to_array(), node.radius).hollow());
+        let (circle_instances, text_instances) = self.nodes.iter().enumerate().fold(
+            (Vec::new(), Vec::new()),
+            |(mut circle_acc, mut text_acc), (index, node)| {
+                circle_acc.push(RawInstance::new(node.pos.to_array(), node.radius).hollow());
 
-            acc.push(
-                RawInstance::new(node.get_point(node.rotation).to_array(), 5.)
-                    .with_color([1., 0., 0., 1.]),
-            );
+                circle_acc.push(
+                    RawInstance::new(node.get_point(node.rotation).to_array(), 5.)
+                        .with_color([1., 0., 0., 1.]),
+                );
 
-            acc
-        });
+                text_acc.push(TextData {
+                    text: format!(
+                        "Pos {}, Rotation {}",
+                        node.pos.trunc(),
+                        node.rotation.to_degrees()
+                    ),
+                    pos: (10., 30. * index as f32),
+                    color: [255, 0, 0],
+                });
 
-        // let instances = self
-        //     .nodes
-        //     .iter()
-        //     .map(|node| RawInstance {
-        //         pos: node.pos.to_array(),
-        //         radius: node.radius,
-        //         border_radius: 6.,
-        //         color: [1., 1., 1., 0.],
-        //         border_color: [0., 0., 0., 1.],
-        //     })
-        //     .collect::<Vec<_>>();
-
-        self.renderer.update_pipeline(
-            &mut self.circles,
-            &[
-                instances.as_slice(),
-                // &[RawInstance {
-                //     pos: self.mouse_pos.to_array(),
-                //     radius: 20.,
-                //     border_radius: 3.,
-                //     color: [0.95, 0., 0.8, 1.],
-                //     border_color: [1., 0., 1., 1.],
-                // }],
-            ]
-            .concat(),
+                (circle_acc, text_acc)
+            },
         );
 
-        self.renderer.render(&mut [&mut self.circles]).unwrap();
+        self.renderer
+            .update_pipeline(&mut self.circles, circle_instances.as_slice());
+
+        self.renderer
+            .update_pipeline(&mut self.text, text_instances.as_slice());
+
+        self.renderer
+            .render(&mut [&mut self.circles, &mut self.text])
+            .unwrap();
 
         self.window.request_redraw();
+
+        self.text.trim();
     }
 }
 
