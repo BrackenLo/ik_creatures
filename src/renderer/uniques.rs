@@ -21,10 +21,12 @@ impl Uniques {
     }
 
     pub fn insert_next(&mut self, device: &wgpu::Device) -> &mut UniqueProfile {
+        let default_camera = OrthographicCamera::default();
+
         let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Unique Profile camera buffer"),
-            contents: bytemuck::cast_slice(&[OrthographicCamera::default().into_uniform()]),
-            usage: wgpu::BufferUsages::UNIFORM,
+            contents: bytemuck::cast_slice(&[default_camera.into_uniform()]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
         let camera_bind_group_layout =
@@ -59,6 +61,16 @@ impl Uniques {
 
         self.profiles.push(profile);
         self.profiles.last_mut().unwrap()
+    }
+
+    pub fn update_camera(&mut self, queue: &wgpu::Queue, slot: usize, data: &dyn Camera) {
+        let profile = self.profiles.get(slot).unwrap();
+
+        queue.write_buffer(
+            &profile.camera_buffer,
+            0,
+            bytemuck::cast_slice(&[data.into_uniform()]),
+        );
     }
 }
 
@@ -114,12 +126,15 @@ impl Default for PerspectiveCamera {
 
 impl Camera for PerspectiveCamera {
     fn into_uniform(&self) -> CameraUniform {
-        CameraUniform::new(self.get_projection(), self.translation.into())
+        CameraUniform::new(
+            self.get_projection().to_cols_array(),
+            self.translation.into(),
+        )
     }
 }
 
 impl PerspectiveCamera {
-    fn get_projection(&self) -> [f32; 16] {
+    fn get_projection(&self) -> glam::Mat4 {
         let forward = (self.rotation * glam::Vec3::Z).normalize();
 
         let projection_matrix =
@@ -128,7 +143,7 @@ impl PerspectiveCamera {
         let view_matrix =
             glam::Mat4::look_at_lh(self.translation, self.translation + forward, self.up);
 
-        (projection_matrix * view_matrix).to_cols_array()
+        projection_matrix * view_matrix
     }
 }
 
@@ -168,12 +183,15 @@ impl Default for OrthographicCamera {
 
 impl Camera for OrthographicCamera {
     fn into_uniform(&self) -> CameraUniform {
-        CameraUniform::new(self.get_projection(), self.translation.into())
+        CameraUniform::new(
+            self.get_projection().to_cols_array(),
+            self.translation.into(),
+        )
     }
 }
 
 impl OrthographicCamera {
-    fn get_projection(&self) -> [f32; 16] {
+    fn get_projection(&self) -> glam::Mat4 {
         let projection_matrix = glam::Mat4::orthographic_lh(
             self.left,
             self.right,
@@ -186,7 +204,7 @@ impl OrthographicCamera {
         let transform_matrix =
             glam::Mat4::from_rotation_translation(self.rotation, self.translation);
 
-        (projection_matrix * transform_matrix).to_cols_array()
+        projection_matrix * transform_matrix
     }
 
     pub fn new_sized(width: f32, height: f32) -> Self {

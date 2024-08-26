@@ -37,7 +37,7 @@ struct VertexOut {
 fn vs_main(in: VertexIn) -> VertexOut {
     var out: VertexOut;
 
-    var vertex_pos = in.vertex_pos * (in.radius + in.border_radius * 2.) + in.pos;
+    var vertex_pos = in.vertex_pos * (in.radius * 2. + in.border_radius * 2.) + in.pos;
 
     out.clip_position = 
         camera.projection * 
@@ -46,7 +46,7 @@ fn vs_main(in: VertexIn) -> VertexOut {
     out.pos = vertex_pos;
     out.center = in.pos;
 
-    out.radius = in.radius / 2.;
+    out.radius = in.radius;
     out.border_radius = in.border_radius;
 
     out.color = in.color;
@@ -60,9 +60,15 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     let distance = distance(in.pos, in.center);
 
     if distance < in.radius {
+        if in.color.w == 0. {
+            discard;
+        }
         return in.color;
     }
     if distance <= in.radius + in.border_radius {
+        if in.border_color.w == 0. {
+            discard;
+        }
         return in.border_color;
     }
 

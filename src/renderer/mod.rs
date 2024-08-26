@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use tools::{Pipeline, PipelineUpdate};
-use uniques::Uniques;
+use uniques::{Camera, Uniques};
 
 pub mod circles;
 pub mod tools;
@@ -85,6 +85,16 @@ impl Renderer {
     #[inline]
     pub fn update_pipeline<D, T: PipelineUpdate<D>>(&self, pipeline: &mut T, data: D) {
         pipeline.update(&self.core, data);
+    }
+
+    #[inline]
+    pub fn uniques(&self) -> &Uniques {
+        &self.uniques
+    }
+
+    #[inline]
+    pub fn update_camera(&mut self, slot: usize, data: &dyn Camera) {
+        self.uniques.update_camera(&self.core.queue, slot, data);
     }
 
     pub fn render(&self, pipelines: &mut [&mut dyn Pipeline]) -> anyhow::Result<()> {

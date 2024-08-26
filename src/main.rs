@@ -1,8 +1,13 @@
 use std::sync::Arc;
 
-use ik_creatures::renderer::{
-    circles::{CirclePipeline, RawInstance},
-    Renderer,
+use glam::{vec2, Vec2};
+use ik_creatures::{
+    ik::Node,
+    renderer::{
+        circles::{CirclePipeline, RawInstance},
+        uniques::OrthographicCamera,
+        Renderer,
+    },
 };
 use pollster::FutureExt;
 use winit::{
@@ -94,8 +99,15 @@ impl ApplicationHandler for Runner {
 //====================================================================
 
 pub struct App {
+    window: Arc<winit::window::Window>,
     renderer: Renderer,
     circles: CirclePipeline,
+
+    camera: OrthographicCamera,
+    mouse_pos: Vec2,
+    mouse_vector: Vec2,
+
+    nodes: Vec<Node>,
 }
 
 impl App {
@@ -106,10 +118,29 @@ impl App {
                 .unwrap(),
         );
 
-        let mut renderer = Renderer::new(window).block_on().unwrap();
+        let mut renderer = Renderer::new(window.clone()).block_on().unwrap();
         let circles = renderer.create_pipeline();
 
-        Self { renderer, circles }
+        let camera = OrthographicCamera::default();
+        renderer.update_camera(0, &camera);
+
+        // let nodes = [
+        //     45, 50, 40, 40, 50, 60, 63, 65, 63, 60, 40, 30, 20, 20, 20, 20, 20, 10,
+        // ];
+
+        let nodes = [50; 2];
+
+        let nodes = nodes.into_iter().map(|val| Node::new(val as f32)).collect();
+
+        Self {
+            window,
+            renderer,
+            circles,
+            camera,
+            mouse_pos: Vec2::ZERO,
+            mouse_vector: Vec2::ZERO,
+            nodes,
+        }
     }
 
     pub fn window_event(
@@ -126,60 +157,100 @@ impl App {
                 log::info!("Close requested. Closing App.");
                 event_loop.exit();
             }
-
             winit::event::WindowEvent::RedrawRequested => self.tick(),
+            winit::event::WindowEvent::CursorMoved { position, .. } => {
+                let size = self.window.inner_size();
+                let pos = vec2(
+                    position.x as f32,
+                    (size.height as f32) - (position.y as f32),
+                );
 
-            // winit::event::WindowEvent::KeyboardInput { event, .. } => {
-            //     if let winit::keyboard::PhysicalKey::Code(key) = event.physical_key {
-            //         self.world.run_with_data(
-            //             tools::sys_process_keypress,
-            //             (key, event.state.is_pressed()),
-            //         );
-            //     }
-            // }
+                let half_size = vec2(size.width as f32 / 2., size.height as f32 / 2.);
+                let relative_pos = pos - half_size + self.camera.translation.truncate();
 
-            // winit::event::WindowEvent::ActivationTokenDone { serial, token } => todo!(),
-            // winit::event::WindowEvent::Moved(_) => todo!(),
-            // winit::event::WindowEvent::DroppedFile(_) => todo!(),
-            // winit::event::WindowEvent::HoveredFile(_) => todo!(),
-            // winit::event::WindowEvent::HoveredFileCancelled => todo!(),
-            // winit::event::WindowEvent::Focused(_) => todo!(),
-            // winit::event::WindowEvent::ModifiersChanged(_) => todo!(),
-            // winit::event::WindowEvent::Ime(_) => todo!(),
-            // winit::event::WindowEvent::CursorMoved { device_id, position } => todo!(),
-            // winit::event::WindowEvent::CursorEntered { device_id } => todo!(),
-            // winit::event::WindowEvent::CursorLeft { device_id } => todo!(),
-            // winit::event::WindowEvent::MouseWheel { device_id, delta, phase } => todo!(),
-            // winit::event::WindowEvent::MouseInput { device_id, state, button } => todo!(),
-            // winit::event::WindowEvent::PinchGesture { device_id, delta, phase } => todo!(),
-            // winit::event::WindowEvent::PanGesture { device_id, delta, phase } => todo!(),
-            // winit::event::WindowEvent::DoubleTapGesture { device_id } => todo!(),
-            // winit::event::WindowEvent::RotationGesture { device_id, delta, phase } => todo!(),
-            // winit::event::WindowEvent::TouchpadPressure { device_id, pressure, stage } => todo!(),
-            // winit::event::WindowEvent::AxisMotion { device_id, axis, value } => todo!(),
-            // winit::event::WindowEvent::Touch(_) => todo!(),
-            // winit::event::WindowEvent::ScaleFactorChanged { scale_factor, inner_size_writer } => todo!(),
-            // winit::event::WindowEvent::ThemeChanged(_) => todo!(),
-            // winit::event::WindowEvent::Occluded(_) => todo!(),
+                self.mouse_vector = relative_pos - self.mouse_pos;
+                self.mouse_pos = relative_pos;
+            }
+
             _ => {}
         }
     }
 
-    fn resize(&mut self, _size: winit::dpi::PhysicalSize<u32>) {}
+    fn resize(&mut self, size: winit::dpi::PhysicalSize<u32>) {
+        let half_width = size.width as f32 / 2.;
+        let half_height = size.height as f32 / 2.;
+
+        self.camera.left = -half_width;
+        self.camera.right = half_width;
+
+        self.camera.top = half_height;
+        self.camera.bottom = -half_height;
+
+        self.renderer.update_camera(0, &self.camera);
+    }
 
     fn tick(&mut self) {
+        if !self.nodes.is_empty() {
+            self.nodes[0].pos = self.mouse_pos;
+            self.nodes[0].rotation = self.mouse_vector.to_angle();
+
+            // println!("Root rotation {}", self.nodes[0].rotation.to_degrees());
+        }
+
+        if self.nodes.len() > 1 {
+            (1..self.nodes.len()).for_each(|index| {
+                let (first, second) = self.nodes.split_at_mut(index);
+
+                let first = first.last().unwrap();
+                let second = &mut second[0];
+
+                second.attach(first);
+
+                // println!("Nexr rotation {}", second.rotation.to_degrees());
+            });
+        }
+
+        let instances = self.nodes.iter().fold(Vec::new(), |mut acc, node| {
+            acc.push(RawInstance::new(node.pos.to_array(), node.radius).hollow());
+
+            acc.push(
+                RawInstance::new(node.get_point(node.rotation).to_array(), 5.)
+                    .with_color([1., 0., 0., 1.]),
+            );
+
+            acc
+        });
+
+        // let instances = self
+        //     .nodes
+        //     .iter()
+        //     .map(|node| RawInstance {
+        //         pos: node.pos.to_array(),
+        //         radius: node.radius,
+        //         border_radius: 6.,
+        //         color: [1., 1., 1., 0.],
+        //         border_color: [0., 0., 0., 1.],
+        //     })
+        //     .collect::<Vec<_>>();
+
         self.renderer.update_pipeline(
             &mut self.circles,
-            &[RawInstance {
-                pos: [0., 0.],
-                radius: 500.,
-                border_radius: 5.,
-                color: [1., 1., 1., 1.],
-                border_color: [0., 0., 0., 1.],
-            }],
+            &[
+                instances.as_slice(),
+                // &[RawInstance {
+                //     pos: self.mouse_pos.to_array(),
+                //     radius: 20.,
+                //     border_radius: 3.,
+                //     color: [0.95, 0., 0.8, 1.],
+                //     border_color: [1., 0., 1., 1.],
+                // }],
+            ]
+            .concat(),
         );
 
         self.renderer.render(&mut [&mut self.circles]).unwrap();
+
+        self.window.request_redraw();
     }
 }
 

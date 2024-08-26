@@ -60,6 +60,31 @@ impl Vertex for RawInstance {
     }
 }
 
+impl RawInstance {
+    pub fn new(pos: [f32; 2], radius: f32) -> Self {
+        Self {
+            pos,
+            radius,
+            border_radius: 6.,
+            color: [1., 1., 1., 1.],
+            border_color: [0., 0., 0., 1.],
+        }
+    }
+    pub fn with_color(mut self, color: [f32; 4]) -> Self {
+        self.color = color;
+        self
+    }
+    pub fn hollow(mut self) -> Self {
+        self.color = [0., 0., 0., 0.];
+        self
+    }
+    pub fn with_border(mut self, radius: f32, color: [f32; 4]) -> Self {
+        self.border_radius = radius;
+        self.border_color = color;
+        self
+    }
+}
+
 pub struct CirclePipeline {
     pipeline: wgpu::RenderPipeline,
 
