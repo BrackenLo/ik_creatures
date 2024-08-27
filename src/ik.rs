@@ -1,14 +1,19 @@
 //====================================================================
 
+use core::f32;
+use std::f32::consts::{PI, TAU};
+
 use glam::{vec2, Vec2};
 
 //====================================================================
+
+const ANGLE: f32 = TAU + PI;
 
 pub struct Node {
     pub radius: f32,
 
     pub pos: Vec2,
-    pub rotation: f32,
+    rotation: f32,
     pub max_rotation: f32,
 }
 
@@ -18,41 +23,48 @@ impl Node {
             radius,
             pos: Vec2::ZERO,
             rotation: 0.,
-            max_rotation: 45_f32.to_radians(),
+            max_rotation: 30_f32.to_radians(),
         }
     }
 
+    pub fn set_rotation(&mut self, rotation: f32) {
+        self.rotation = rotation;
+        // self.rotation = rotation % TAU;
+        // if self.rotation < 0. {
+        //     self.rotation += TAU;
+        // }
+    }
+
+    #[inline]
+    pub fn get_rotation(&self) -> f32 {
+        self.rotation
+    }
+
     pub fn attach(&mut self, parent: &Node) {
-        // let rotation_diff = self.rotation - parent.rotation;
+        let vector = parent.pos - self.pos;
 
-        // if rotation_diff > self.max_rotation {
-        //     // println!(
-        //     //     "Diff = {}, old rot = {}, new rot = {}",
-        //     //     rotation_diff.to_degrees(),
-        //     //     self.rotation.to_degrees(),
-        //     //     parent.rotation.to_degrees()
-        //     // );
+        self.set_rotation(vector.to_angle());
 
-        //     self.rotation = parent.rotation + self.max_rotation;
-        //     self.pos = self.get_point(self.rotation);
-        //     return;
-        // }
-        // //
-        // else if rotation_diff < -self.max_rotation {
-        //     self.rotation = parent.rotation - self.max_rotation;
-        //     self.pos = self.get_point(self.rotation);
-        //     return;
-        // }
+        // 180 - abs(abs(a1 - a2) - 180);
 
-        // println!("A");
+        // delta = (targetAngle - myAngle + 540) % 360 - 180;
 
-        let vector = self.pos - parent.pos;
-        self.rotation = (-vector).to_angle();
+        let rotation_diff = (self.rotation - parent.rotation + ANGLE) % TAU - PI;
+
+        // let rotation_diff = PI - ((self.rotation - parent.rotation).abs() - PI).abs();
+
+        let rotation_diff = rotation_diff.clamp(-self.max_rotation, self.max_rotation);
+
+        // let rotation_diff =
+        //     (self.rotation - parent.rotation).clamp(-self.max_rotation, self.max_rotation);
+
+        self.rotation = parent.rotation + rotation_diff;
 
         let scaled = Vec2::from_angle(self.rotation) * parent.radius;
 
         // let scaled = vector.normalize_or(Vec2::ONE) * parent.radius;
-        self.pos = scaled + parent.pos;
+        // self.pos = scaled - parent.pos;
+        self.pos = parent.pos - scaled;
 
         // self.pos = parent.get_point(-self.rotation);
     }

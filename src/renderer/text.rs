@@ -1,6 +1,6 @@
 use glyphon::{
-    Attrs, Buffer, Cache, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache,
-    TextArea, TextAtlas, TextBounds, TextRenderer, Viewport,
+    Attrs, Buffer, Cache, Color, FontSystem, Metrics, Resolution, Shaping, SwashCache, TextArea,
+    TextAtlas, TextBounds, TextRenderer, Viewport,
 };
 
 use super::tools::{Pipeline, PipelineUpdate};
@@ -34,9 +34,7 @@ impl Pipeline for TextPipeline {
             None,
         );
 
-        let mut text_buffer = Buffer::new(&mut font_system, Metrics::new(30., 42.));
-
-        text_buffer.set_size(&mut font_system, Some(1920.), Some(1080.));
+        let text_buffer = Buffer::new(&mut font_system, Metrics::new(30., 42.));
 
         Self {
             renderer,
@@ -97,7 +95,8 @@ impl PipelineUpdate<&[TextData]> for TextPipeline {
                 buffer.set_text(
                     &mut self.font_system,
                     &val.text,
-                    Attrs::new().family(Family::SansSerif),
+                    // Attrs::new().family(Family::Monospace),
+                    Attrs::new(),
                     Shaping::Advanced,
                 );
 

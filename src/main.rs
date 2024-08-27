@@ -131,7 +131,7 @@ impl App {
         //     45, 50, 40, 40, 50, 60, 63, 65, 63, 60, 40, 30, 20, 20, 20, 20, 20, 10,
         // ];
 
-        let nodes = [50; 2];
+        let nodes = [50; 30];
 
         let nodes = nodes.into_iter().map(|val| Node::new(val as f32)).collect();
 
@@ -172,7 +172,7 @@ impl App {
                 let half_size = vec2(size.width as f32 / 2., size.height as f32 / 2.);
                 let relative_pos = pos - half_size + self.camera.translation.truncate();
 
-                self.mouse_vector = relative_pos - self.mouse_pos;
+                self.mouse_vector = self.mouse_vector.lerp(relative_pos - self.mouse_pos, 0.5);
                 self.mouse_pos = relative_pos;
             }
 
@@ -199,7 +199,8 @@ impl App {
     fn tick(&mut self) {
         if !self.nodes.is_empty() {
             self.nodes[0].pos = self.mouse_pos;
-            self.nodes[0].rotation = self.mouse_vector.to_angle();
+
+            self.nodes[0].set_rotation(self.mouse_vector.to_angle());
 
             // println!("Root rotation {}", self.nodes[0].rotation.to_degrees());
         }
@@ -223,18 +224,25 @@ impl App {
                 circle_acc.push(RawInstance::new(node.pos.to_array(), node.radius).hollow());
 
                 circle_acc.push(
-                    RawInstance::new(node.get_point(node.rotation).to_array(), 5.)
+                    RawInstance::new(node.get_point(node.get_rotation()).to_array(), 5.)
                         .with_color([1., 0., 0., 1.]),
                 );
 
+                let diff = if index == 0 {
+                    0.
+                } else {
+                    node.get_rotation() - self.nodes[index - 1].get_rotation()
+                };
+
                 text_acc.push(TextData {
                     text: format!(
-                        "Pos {}, Rotation {}",
+                        "Pos {}, Rotation {}, Diff {}",
                         node.pos.trunc(),
-                        node.rotation.to_degrees()
+                        node.get_rotation().to_degrees(),
+                        diff
                     ),
                     pos: (10., 30. * index as f32),
-                    color: [255, 0, 0],
+                    color: [0, 0, 0],
                 });
 
                 (circle_acc, text_acc)
