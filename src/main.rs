@@ -1,3 +1,5 @@
+//====================================================================
+
 use std::{f32::consts::FRAC_PI_2, sync::Arc};
 
 use glam::{vec2, Vec2};
@@ -17,6 +19,8 @@ use winit::{
     event_loop::{ActiveEventLoop, EventLoop},
 };
 
+//====================================================================
+
 fn main() {
     println!("Hello, world!");
 
@@ -33,6 +37,8 @@ fn main() {
         Err(e) => println!("Error on close: {}", e),
     };
 }
+
+//====================================================================
 
 struct Runner {
     inner: Option<App>,
@@ -205,8 +211,6 @@ impl App {
             self.nodes[0].pos = self.mouse_pos;
 
             self.nodes[0].set_rotation(self.mouse_vector.to_angle());
-
-            // println!("Root rotation {}", self.nodes[0].rotation.to_degrees());
         }
 
         if self.nodes.len() > 1 {
@@ -217,8 +221,6 @@ impl App {
                 let second = &mut second[0];
 
                 second.attach(first);
-
-                // println!("Nexr rotation {}", second.rotation.to_degrees());
             });
         }
 

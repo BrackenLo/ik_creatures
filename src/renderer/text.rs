@@ -1,9 +1,13 @@
+//====================================================================
+
 use glyphon::{
     Attrs, Buffer, Cache, Color, FontSystem, Metrics, Resolution, Shaping, SwashCache, TextArea,
     TextAtlas, TextBounds, TextRenderer, Viewport,
 };
 
 use super::tools::{Pipeline, PipelineUpdate};
+
+//====================================================================
 
 pub struct TextPipeline {
     renderer: TextRenderer,
@@ -129,3 +133,5 @@ impl PipelineUpdate<&[TextData]> for TextPipeline {
             .unwrap();
     }
 }
+
+//====================================================================

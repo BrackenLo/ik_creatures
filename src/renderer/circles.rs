@@ -1,3 +1,5 @@
+//====================================================================
+
 use wgpu::util::DeviceExt;
 
 use super::{
@@ -5,6 +7,8 @@ use super::{
     uniques::Uniques,
     Core,
 };
+
+//====================================================================
 
 #[repr(C)]
 #[derive(bytemuck::Pod, bytemuck::Zeroable, Clone, Copy)]
@@ -85,6 +89,8 @@ impl RawInstance {
     }
 }
 
+//====================================================================
+
 pub struct CirclePipeline {
     pipeline: wgpu::RenderPipeline,
 
@@ -98,11 +104,11 @@ pub struct CirclePipeline {
 
 impl Pipeline for CirclePipeline {
     fn new(core: &Core, uniques: &mut Uniques) -> Self {
-        let unique = uniques.first(&core.device);
+        let unique = uniques.first(core.device());
 
         let pipeline = tools::create_pipeline(
-            &core.device,
-            &core.config,
+            core.device(),
+            core.config(),
             "Circle Pipeline",
             &[&unique.camera_bind_group_layout],
             &[RawVertex::desc(), RawInstance::desc()],
@@ -168,8 +174,8 @@ impl Pipeline for CirclePipeline {
 impl PipelineUpdate<&[RawInstance]> for CirclePipeline {
     fn update(&mut self, core: &Core, data: &[RawInstance]) {
         tools::update_instance_buffer(
-            &core.device,
-            &core.queue,
+            core.device(),
+            core.queue(),
             "Circle Pipeline Instance Buffer",
             &mut self.instance_buffer,
             &mut self.instance_count,
@@ -177,3 +183,5 @@ impl PipelineUpdate<&[RawInstance]> for CirclePipeline {
         );
     }
 }
+
+//====================================================================

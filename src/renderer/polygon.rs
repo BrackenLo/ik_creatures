@@ -1,8 +1,12 @@
+//====================================================================
+
 use wgpu::util::DeviceExt;
 
 use crate::renderer::tools;
 
 use super::tools::{Pipeline, PipelineUpdate, Vertex};
+
+//====================================================================
 
 #[repr(C)]
 #[derive(bytemuck::Pod, bytemuck::Zeroable, Clone, Copy)]
@@ -42,7 +46,7 @@ impl Pipeline for PolygonPipeline {
     where
         Self: Sized,
     {
-        let unique = uniques.first(&core.device);
+        let unique = uniques.first(core.device());
 
         let pipeline = tools::create_pipeline(
             core.device(),
@@ -152,6 +156,8 @@ impl PipelineUpdate<&[(&[RawVertex], &[u16])]> for PolygonPipeline {
     }
 }
 
+//====================================================================
+
 pub fn calculate_strip(vertices: &[[f32; 2]]) -> (Vec<RawVertex>, Vec<u16>) {
     if vertices.len() < 4 {
         return (Vec::new(), Vec::new());
@@ -178,3 +184,5 @@ pub fn calculate_strip(vertices: &[[f32; 2]]) -> (Vec<RawVertex>, Vec<u16>) {
 
     (vertices, indices)
 }
+
+//====================================================================
