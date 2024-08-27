@@ -1,10 +1,11 @@
-use std::sync::Arc;
+use std::{f32::consts::FRAC_PI_2, sync::Arc};
 
 use glam::{vec2, Vec2};
 use ik_creatures::{
     ik::Node,
     renderer::{
         circles::{CirclePipeline, RawInstance},
+        polygon::{self, PolygonPipeline},
         text::{TextData, TextPipeline},
         uniques::OrthographicCamera,
         Renderer,
@@ -104,6 +105,7 @@ pub struct App {
     renderer: Renderer,
     circles: CirclePipeline,
     text: TextPipeline,
+    polygons: PolygonPipeline,
 
     camera: OrthographicCamera,
     mouse_pos: Vec2,
@@ -123,15 +125,16 @@ impl App {
         let mut renderer = Renderer::new(window.clone()).block_on().unwrap();
         let circles = renderer.create_pipeline();
         let text = renderer.create_pipeline();
+        let polygons = renderer.create_pipeline();
 
         let camera = OrthographicCamera::default();
         renderer.update_camera(0, &camera);
 
-        // let nodes = [
-        //     45, 50, 40, 40, 50, 60, 63, 65, 63, 60, 40, 30, 20, 20, 20, 20, 20, 10,
-        // ];
+        let nodes = [
+            20, 45, 50, 40, 40, 50, 60, 63, 65, 63, 60, 40, 30, 20, 20, 20, 20, 20, 10,
+        ];
 
-        let nodes = [50; 30];
+        // let nodes = [50; 30];
 
         let nodes = nodes.into_iter().map(|val| Node::new(val as f32)).collect();
 
@@ -140,6 +143,7 @@ impl App {
             renderer,
             circles,
             text,
+            polygons,
             camera,
             mouse_pos: Vec2::ZERO,
             mouse_vector: Vec2::ZERO,
@@ -249,14 +253,35 @@ impl App {
             },
         );
 
+        let mesh_nodes = self
+            .nodes
+            .iter()
+            .flat_map(|node| {
+                let node_right = node.get_point(node.get_rotation() - FRAC_PI_2).to_array();
+                let node_left = node.get_point(node.get_rotation() + FRAC_PI_2).to_array();
+                vec![node_right, node_left]
+            })
+            .collect::<Vec<_>>();
+
+        let (vertices, indices) = polygon::calculate_strip(&mesh_nodes);
+
         self.renderer
             .update_pipeline(&mut self.circles, circle_instances.as_slice());
 
         self.renderer
             .update_pipeline(&mut self.text, text_instances.as_slice());
 
+        self.renderer.update_pipeline(
+            &mut self.polygons,
+            &[(vertices.as_slice(), indices.as_slice())],
+        );
+
         self.renderer
-            .render(&mut [&mut self.circles, &mut self.text])
+            .render(&mut [
+                &mut self.polygons,
+                // &mut self.circles,
+                &mut self.text,
+            ])
             .unwrap();
 
         self.window.request_redraw();

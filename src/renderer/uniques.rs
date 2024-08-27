@@ -20,7 +20,15 @@ impl Uniques {
         self.profiles.get(slot)
     }
 
-    pub fn insert_next(&mut self, device: &wgpu::Device) -> &mut UniqueProfile {
+    pub fn first(&mut self, device: &wgpu::Device) -> &UniqueProfile {
+        if self.profiles.is_empty() {
+            self.insert(device);
+        }
+
+        self.profiles.first().unwrap()
+    }
+
+    fn insert(&mut self, device: &wgpu::Device) {
         let default_camera = OrthographicCamera::default();
 
         let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -60,6 +68,10 @@ impl Uniques {
         };
 
         self.profiles.push(profile);
+    }
+
+    pub fn insert_next_mut(&mut self, device: &wgpu::Device) -> &mut UniqueProfile {
+        self.insert(device);
         self.profiles.last_mut().unwrap()
     }
 

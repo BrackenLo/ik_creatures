@@ -98,7 +98,7 @@ pub struct CirclePipeline {
 
 impl Pipeline for CirclePipeline {
     fn new(core: &Core, uniques: &mut Uniques) -> Self {
-        let unique = uniques.insert_next(&core.device);
+        let unique = uniques.first(&core.device);
 
         let pipeline = tools::create_pipeline(
             &core.device,

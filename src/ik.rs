@@ -23,7 +23,7 @@ impl Node {
             radius,
             pos: Vec2::ZERO,
             rotation: 0.,
-            max_rotation: 30_f32.to_radians(),
+            max_rotation: 20_f32.to_radians(),
         }
     }
 

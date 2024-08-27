@@ -5,6 +5,7 @@ use tools::{Pipeline, PipelineUpdate};
 use uniques::{Camera, Uniques};
 
 pub mod circles;
+pub mod polygon;
 pub mod text;
 pub mod tools;
 pub mod uniques;
@@ -29,6 +30,10 @@ impl Core {
     #[inline]
     pub fn queue(&self) -> &wgpu::Queue {
         &self.queue
+    }
+    #[inline]
+    pub fn config(&self) -> &wgpu::SurfaceConfiguration {
+        &self.config
     }
 }
 
