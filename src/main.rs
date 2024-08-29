@@ -1,16 +1,13 @@
 //====================================================================
 
-use std::{f32::consts::FRAC_PI_2, sync::Arc};
+use std::sync::Arc;
 
 use glam::{vec2, Vec2};
 use ik_creatures::{
-    ik::Node,
+    ik::{self, Skeleton},
     renderer::{
-        circles::{CirclePipeline, RawInstance},
-        polygon::{self, PolygonPipeline},
-        text::{TextData, TextPipeline},
-        uniques::OrthographicCamera,
-        Renderer,
+        circles::CirclePipeline, polygon::PolygonPipeline, text::TextPipeline,
+        uniques::OrthographicCamera, Renderer,
     },
 };
 use pollster::FutureExt;
@@ -116,8 +113,9 @@ pub struct App {
     camera: OrthographicCamera,
     mouse_pos: Vec2,
     mouse_vector: Vec2,
+    mouse_down: bool,
 
-    nodes: Vec<Node>,
+    skeleton: Skeleton,
 }
 
 impl App {
@@ -136,13 +134,9 @@ impl App {
         let camera = OrthographicCamera::default();
         renderer.update_camera(0, &camera);
 
-        let nodes = [
-            20, 45, 50, 40, 40, 50, 60, 63, 65, 63, 60, 40, 30, 20, 20, 20, 20, 20, 10,
-        ];
-
-        // let nodes = [50; 30];
-
-        let nodes = nodes.into_iter().map(|val| Node::new(val as f32)).collect();
+        let mut skeleton = Skeleton::new();
+        ik::spawn_creature(&mut skeleton);
+        // ik::spawn_arm(&mut skeleton);
 
         Self {
             window,
@@ -153,7 +147,8 @@ impl App {
             camera,
             mouse_pos: Vec2::ZERO,
             mouse_vector: Vec2::ZERO,
-            nodes,
+            mouse_down: false,
+            skeleton,
         }
     }
 
@@ -185,6 +180,12 @@ impl App {
                 self.mouse_vector = self.mouse_vector.lerp(relative_pos - self.mouse_pos, 0.5);
                 self.mouse_pos = relative_pos;
             }
+            winit::event::WindowEvent::MouseInput { state, button, .. } => match button {
+                winit::event::MouseButton::Left => {
+                    self.mouse_down = state.is_pressed();
+                }
+                _ => {}
+            },
 
             _ => {}
         }
@@ -207,81 +208,37 @@ impl App {
     }
 
     fn tick(&mut self) {
-        if !self.nodes.is_empty() {
-            self.nodes[0].pos = self.mouse_pos;
-
-            self.nodes[0].set_rotation(self.mouse_vector.to_angle());
+        if self.mouse_down {
+            if let Some(mut root) = self.skeleton.get_node_mut(0) {
+                root.pos = self.mouse_pos;
+                root.set_rotation(self.mouse_vector.to_angle());
+            }
         }
 
-        if self.nodes.len() > 1 {
-            (1..self.nodes.len()).for_each(|index| {
-                let (first, second) = self.nodes.split_at_mut(index);
-
-                let first = first.last().unwrap();
-                let second = &mut second[0];
-
-                second.attach(first);
-            });
+        if let Some(ik) = self.skeleton.get_ik(0) {
+            ik.target = self.mouse_pos;
         }
 
-        let (circle_instances, text_instances) = self.nodes.iter().enumerate().fold(
-            (Vec::new(), Vec::new()),
-            |(mut circle_acc, mut text_acc), (index, node)| {
-                circle_acc.push(RawInstance::new(node.pos.to_array(), node.radius).hollow());
+        self.skeleton.tick();
 
-                circle_acc.push(
-                    RawInstance::new(node.get_point(node.get_rotation()).to_array(), 5.)
-                        .with_color([1., 0., 0., 1.]),
-                );
-
-                let diff = if index == 0 {
-                    0.
-                } else {
-                    node.get_rotation() - self.nodes[index - 1].get_rotation()
-                };
-
-                text_acc.push(TextData {
-                    text: format!(
-                        "Pos {}, Rotation {}, Diff {}",
-                        node.pos.trunc(),
-                        node.get_rotation().to_degrees(),
-                        diff
-                    ),
-                    pos: (10., 30. * index as f32),
-                    color: [0, 0, 0],
-                });
-
-                (circle_acc, text_acc)
-            },
-        );
-
-        let mesh_nodes = self
-            .nodes
-            .iter()
-            .flat_map(|node| {
-                let node_right = node.get_point(node.get_rotation() - FRAC_PI_2).to_array();
-                let node_left = node.get_point(node.get_rotation() + FRAC_PI_2).to_array();
-                vec![node_right, node_left]
-            })
-            .collect::<Vec<_>>();
-
-        let (vertices, indices) = polygon::calculate_strip(&mesh_nodes);
+        let circle_instances = self.skeleton.circles();
 
         self.renderer
             .update_pipeline(&mut self.circles, circle_instances.as_slice());
 
-        self.renderer
-            .update_pipeline(&mut self.text, text_instances.as_slice());
+        // let mesh_nodes = self.skeleton.triangle_list();
+        // let (vertices, indices) = polygon::calculate_strip(&mesh_nodes[0]);
 
-        self.renderer.update_pipeline(
-            &mut self.polygons,
-            &[(vertices.as_slice(), indices.as_slice())],
-        );
+        // self.renderer.update_pipeline(
+        //     &mut self.polygons,
+        //     &[(vertices.as_slice(), indices.as_slice())],
+        // );
 
         self.renderer
             .render(&mut [
+                // -
                 &mut self.polygons,
-                // &mut self.circles,
+                &mut self.circles,
                 &mut self.text,
             ])
             .unwrap();
