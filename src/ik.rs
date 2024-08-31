@@ -2,8 +2,7 @@
 
 use core::f32;
 use std::{
-    cell::{RefCell, RefMut},
-    collections::HashMap,
+    cell::RefCell,
     f32::consts::{FRAC_PI_2, PI, TAU},
 };
 
@@ -77,13 +76,21 @@ impl Node {
         self.rotation
     }
 
-    pub fn attach(&mut self, parent: &Node) {
+    pub fn attach_rot(&mut self, parent: &Node) {
         let vector = parent.pos - self.pos;
         self.set_rotation(vector.to_angle());
 
         let rotation_diff = (self.rotation - parent.rotation + TAU + PI) % TAU - PI;
         let rotation_diff = rotation_diff.clamp(self.min_rotation, self.max_rotation);
         self.rotation = parent.rotation + rotation_diff;
+
+        let scaled = Vec2::from_angle(self.rotation) * parent.radius;
+        self.pos = parent.pos - scaled;
+    }
+
+    pub fn attach(&mut self, parent: &Node) {
+        let vector = parent.pos - self.pos;
+        self.set_rotation(vector.to_angle());
 
         let scaled = Vec2::from_angle(self.rotation) * parent.radius;
         self.pos = parent.pos - scaled;
@@ -100,7 +107,7 @@ impl Node {
 impl Default for Node {
     fn default() -> Self {
         Self {
-            radius: 50.,
+            radius: 80.,
             pos: Vec2::ZERO,
             rotation: 0.,
             max_rotation: Self::DEFAULT_ANGLE,
@@ -111,246 +118,228 @@ impl Default for Node {
 
 //====================================================================
 
-pub type NodeID = u32;
-
-#[derive(Default)]
-pub struct Skeleton {
-    current_id: NodeID,
-    nodes: HashMap<NodeID, RefCell<Node>>,
-
-    forward_kinematics: Vec<Vec<NodeID>>,
-    inverse_kinematics: Vec<InverseKinematic>,
+pub struct ForwardKinematic {
+    pub nodes: Vec<Node>,
 }
 
-impl Skeleton {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn add_node(&mut self, node: Node) -> NodeID {
-        let id = self.current_id;
-        self.nodes.insert(id, RefCell::new(node));
-        self.current_id += 1;
-
-        id
-    }
-
-    pub fn add_fk(&mut self, fk: Vec<NodeID>) {
-        self.forward_kinematics.push(fk);
-    }
-
-    pub fn add_ik(&mut self, ik: Vec<NodeID>) {
-        let ik = InverseKinematic {
-            nodes: ik,
-            target: Vec2::ZERO,
-        };
-        self.inverse_kinematics.push(ik);
-    }
-
-    pub fn get_node_mut(&mut self, id: NodeID) -> Option<RefMut<Node>> {
-        let node = self.nodes.get(&id)?;
-        Some(node.borrow_mut())
-    }
-
-    pub fn get_ik(&mut self, index: usize) -> Option<&mut InverseKinematic> {
-        self.inverse_kinematics.get_mut(index)
-    }
-
+impl ForwardKinematic {
     pub fn tick(&mut self) {
-        self.forward_kinematics.iter().for_each(|fk| {
-            if fk.len() < 2 {
-                return;
-            }
+        if self.nodes.len() < 2 {
+            return;
+        }
 
-            (1..fk.len()).for_each(|index| {
-                let first = &fk[index - 1];
-                let second = &fk[index];
+        (1..self.nodes.len()).for_each(|index| {
+            let (first, second) = self.nodes.split_at_mut(index);
 
-                let first = self.nodes.get(first).unwrap().borrow();
-                let mut second = self.nodes.get(second).unwrap().borrow_mut();
+            let first = first.last().unwrap();
+            let second = &mut second[0];
 
-                second.attach(&first);
-            })
-        });
+            second.attach_rot(first);
+        })
+    }
 
-        self.inverse_kinematics
-            .iter()
-            .for_each(|ik| fabrik(&self.nodes, ik));
+    pub fn attach(&mut self, root: &Node) {
+        if self.nodes.is_empty() {
+            return;
+        }
+
+        self.nodes[0].attach_rot(root);
+        self.tick();
     }
 }
 
 pub struct InverseKinematic {
-    pub nodes: Vec<NodeID>,
+    pub nodes: Vec<RefCell<Node>>,
+    pub anchor: Vec2,
     pub target: Vec2,
+    pub cycles: usize,
 }
 
-pub fn fabrik(nodes: &HashMap<NodeID, RefCell<Node>>, ik: &InverseKinematic) {
-    if ik.nodes.len() < 3 {
-        return;
+impl InverseKinematic {
+    pub fn new(target: Vec2, anchor: Vec2) -> Self {
+        Self {
+            nodes: Vec::new(),
+            anchor,
+            target,
+            cycles: 1,
+        }
     }
 
-    let (anchor, anchor_rotation) = {
-        let root = nodes.get(&ik.nodes[0]).unwrap().borrow();
-        (root.pos, root.rotation)
-    };
+    pub fn with_nodes<T: IntoIterator<Item = Node>>(mut self, nodes: T) -> Self {
+        self.add_nodes(nodes);
+        self
+    }
 
-    for _ in 0..20 {
+    pub fn add_nodes<T: IntoIterator<Item = Node>>(&mut self, nodes: T) {
         nodes
-            .get(ik.nodes.last().unwrap())
-            .unwrap()
-            .borrow_mut()
-            .pos = ik.target;
-
-        (0..ik.nodes.len() - 1).rev().for_each(|index| {
-            let first = &ik.nodes[index + 1];
-            let second = &ik.nodes[index];
-
-            let first = nodes.get(first).unwrap().borrow();
-            let mut second = nodes.get(second).unwrap().borrow_mut();
-
-            second.attach(&first);
-        });
-
-        {
-            let mut node = nodes.get(&ik.nodes[0]).unwrap().borrow_mut();
-            node.pos = anchor;
-            // node.rotation = anchor_rotation;
-        }
-
-        (1..ik.nodes.len()).for_each(|index| {
-            let first = &ik.nodes[index - 1];
-            let second = &ik.nodes[index];
-
-            let first = nodes.get(first).unwrap().borrow();
-            let mut second = nodes.get(second).unwrap().borrow_mut();
-
-            second.attach(&first);
-        });
-
-        if nodes.get(ik.nodes.last().unwrap()).unwrap().borrow().pos == ik.target {
-            break;
-        }
+            .into_iter()
+            .for_each(|node| self.nodes.push(RefCell::new(node)));
     }
-}
 
-//====================================================================
-
-impl Skeleton {
-    pub fn triangle_list(&self) -> Vec<Vec<[f32; 2]>> {
-        self.forward_kinematics
+    pub fn circles(&self) -> Vec<RawInstance> {
+        self.nodes
             .iter()
-            .map(|skeleton| {
-                skeleton
-                    .iter()
-                    .flat_map(|node| {
-                        let node = self.nodes.get(node).unwrap().borrow();
-
-                        let node_right = node.get_point(node.get_rotation() - FRAC_PI_2).to_array();
-                        let node_left = node.get_point(node.get_rotation() + FRAC_PI_2).to_array();
-                        vec![node_right, node_left]
-                    })
-                    .collect()
+            .flat_map(|node| {
+                let node = node.borrow();
+                [
+                    RawInstance::new(node.pos.to_array(), node.radius).hollow(),
+                    RawInstance::new(node.get_point(node.rotation).to_array(), 5.)
+                        .with_color([1., 0., 0., 1.]),
+                ]
             })
             .collect()
     }
 
-    pub fn circles(&self) -> Vec<RawInstance> {
-        let circles = self
-            .nodes
-            .values()
-            .map(|node| {
-                let node = node.borrow();
+    pub fn fabrik(&mut self) -> bool {
+        if self.nodes.len() < 3 {
+            return false;
+        }
 
-                RawInstance::new(node.pos.to_array(), node.radius).hollow()
-            })
-            .collect::<Vec<_>>();
+        let initial_rot = self.nodes[0].borrow().rotation;
 
-        self.forward_kinematics.iter().fold(circles, |mut acc, fk| {
-            fk.iter().for_each(|node| {
-                let node = self.nodes.get(node).unwrap().borrow();
-                acc.push(
-                    RawInstance::new(node.get_point(node.get_rotation()).to_array(), 5.)
-                        .with_color([1., 0., 0., 1.]),
-                );
+        for _ in 0..self.cycles {
+            self.nodes.last().unwrap().borrow_mut().pos = self.target;
+
+            (0..self.nodes.len() - 1).rev().for_each(|index| {
+                let first = self.nodes[index + 1].borrow();
+                let mut second = self.nodes[index].borrow_mut();
+
+                second.attach(&first);
             });
 
-            acc
-        })
-    }
+            // self.nodes[0].borrow_mut().pos = self.anchor;
+            {
+                let mut node = self.nodes[0].borrow_mut();
+                node.pos = self.anchor;
+                node.rotation = initial_rot;
+            }
 
-    // pub fn text(&self) -> Vec<TextData> {
-    //     self.skeletons.iter()
-    // }
+            (1..self.nodes.len()).for_each(|index| {
+                let first = self.nodes[index - 1].borrow();
+                let mut second = self.nodes[index].borrow_mut();
+
+                second.attach_rot(&first);
+            });
+
+            if self.nodes.last().unwrap().borrow().pos == self.target {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }
+//====================================================================
+
+pub fn triangle_list(nodes: &[Node]) -> Vec<[f32; 2]> {
+    nodes
+        .iter()
+        .flat_map(|node| {
+            let node_right = node.get_point(node.get_rotation() - FRAC_PI_2).to_array();
+            let node_left = node.get_point(node.get_rotation() + FRAC_PI_2).to_array();
+            vec![node_right, node_left]
+        })
+        .collect()
+}
+
+// impl Skeleton {
+//     pub fn triangle_list(&self) -> Vec<Vec<[f32; 2]>> {
+//         self.forward_kinematics
+//             .iter()
+//             .map(|skeleton| {
+//                 skeleton
+//                     .iter()
+//                     .flat_map(|node| {
+//                         let node = self.nodes.get(node).unwrap().borrow();
+
+//                         let node_right = node.get_point(node.get_rotation() - FRAC_PI_2).to_array();
+//                         let node_left = node.get_point(node.get_rotation() + FRAC_PI_2).to_array();
+//                         vec![node_right, node_left]
+//                     })
+//                     .collect()
+//             })
+//             .collect()
+//     }
+
+//     pub fn circles(&self) -> Vec<RawInstance> {
+//         let circles = self
+//             .nodes
+//             .values()
+//             .map(|node| {
+//                 let node = node.borrow();
+
+//                 RawInstance::new(node.pos.to_array(), node.radius).hollow()
+//             })
+//             .collect::<Vec<_>>();
+
+//         self.forward_kinematics.iter().fold(circles, |mut acc, fk| {
+//             fk.iter().for_each(|node| {
+//                 let node = self.nodes.get(node).unwrap().borrow();
+//                 acc.push(
+//                     RawInstance::new(node.get_point(node.get_rotation()).to_array(), 5.)
+//                         .with_color([1., 0., 0., 1.]),
+//                 );
+//             });
+
+//             acc
+//         })
+//     }
+
+//     // pub fn text(&self) -> Vec<TextData> {
+//     //     self.skeletons.iter()
+//     // }
+// }
 
 //====================================================================
 
-pub fn spawn_arm(skeleton: &mut Skeleton) {
-    let nodes = [
-        Node::unlocked(80.),
-        Node::unlocked(80.),
-        Node::unlocked(80.),
-        Node::unlocked(80.),
-        Node::unlocked(80.),
-        Node::unlocked(80.),
-        Node::unlocked(80.),
-        Node::unlocked(80.),
-    ]
-    .into_iter()
-    .map(|node| skeleton.add_node(node))
-    .collect();
+// pub fn spawn_creature(skeleton: &mut Skeleton) {
+//     let nodes = [
+//         Node::new(30.),
+//         Node::locked(45., 0.),
+//         Node::locked(50., 0.),
+//         Node::new(40.),
+//         Node::new(40.),
+//         Node::unlocked(50.), // 5
+//         Node::new(60.),
+//         Node::new(63.),
+//         Node::new(65.),
+//         Node::new(63.),
+//         Node::new(60.),
+//         Node::new(40.),
+//         Node::new(30.),
+//         Node::new(20.),
+//         Node::new(20.),
+//         Node::new(20.),
+//         Node::new(20.),
+//         Node::new(20.),
+//         Node::new(10.),
+//         Node::new(10.),
+//     ]
+//     .into_iter()
+//     .map(|node| skeleton.add_node(node))
+//     .collect();
 
-    skeleton.add_ik(nodes);
-}
+//     skeleton.add_fk(nodes);
 
-pub fn spawn_creature(skeleton: &mut Skeleton) {
-    let nodes = [
-        Node::new(30.),
-        Node::locked(45., 0.),
-        Node::locked(50., 0.),
-        Node::new(40.),
-        Node::new(40.),
-        Node::unlocked(50.), // 5
-        Node::new(60.),
-        Node::new(63.),
-        Node::new(65.),
-        Node::new(63.),
-        Node::new(60.),
-        Node::new(40.),
-        Node::new(30.),
-        Node::new(20.),
-        Node::new(20.),
-        Node::new(20.),
-        Node::new(20.),
-        Node::new(20.),
-        Node::new(10.),
-        Node::new(10.),
-    ]
-    .into_iter()
-    .map(|node| skeleton.add_node(node))
-    .collect();
+//     let node = skeleton.add_node(Node::locked(40., 90.));
+//     skeleton.add_fk(vec![5, node]);
 
-    skeleton.add_fk(nodes);
+//     let mut nodes = [
+//         // Node::angles(20., 90., 90.),
+//         // Node::locked(60., 0.),
+//         Node::default(),
+//         Node::default(),
+//         Node::default(),
+//         Node::default(),
+//         Node::default(),
+//     ]
+//     .into_iter()
+//     .map(|node| skeleton.add_node(node))
+//     .collect::<Vec<_>>();
 
-    let node = skeleton.add_node(Node::locked(40., 90.));
-    skeleton.add_fk(vec![5, node]);
+//     nodes.insert(0, node);
 
-    let mut nodes = [
-        // Node::angles(20., 90., 90.),
-        // Node::locked(60., 0.),
-        Node::default(),
-        Node::default(),
-        Node::default(),
-        Node::default(),
-        Node::default(),
-    ]
-    .into_iter()
-    .map(|node| skeleton.add_node(node))
-    .collect::<Vec<_>>();
-
-    nodes.insert(0, node);
-
-    skeleton.add_ik(nodes);
-}
+//     // skeleton.add_ik(nodes);
+// }
 
 //====================================================================

@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use glam::{vec2, Vec2};
 use ik_creatures::{
-    ik::{self, Skeleton},
+    ik::{InverseKinematic, Node},
     renderer::{
         circles::CirclePipeline, polygon::PolygonPipeline, text::TextPipeline,
         uniques::OrthographicCamera, Renderer,
@@ -115,7 +115,7 @@ pub struct App {
     mouse_vector: Vec2,
     mouse_down: bool,
 
-    skeleton: Skeleton,
+    ik: InverseKinematic,
 }
 
 impl App {
@@ -134,9 +134,12 @@ impl App {
         let camera = OrthographicCamera::default();
         renderer.update_camera(0, &camera);
 
-        let mut skeleton = Skeleton::new();
-        ik::spawn_creature(&mut skeleton);
-        // ik::spawn_arm(&mut skeleton);
+        let ik = InverseKinematic::new(Vec2::ZERO, Vec2::ZERO).with_nodes([
+            Node::default(),
+            Node::default(),
+            Node::default(),
+            Node::default(),
+        ]);
 
         Self {
             window,
@@ -148,7 +151,7 @@ impl App {
             mouse_pos: Vec2::ZERO,
             mouse_vector: Vec2::ZERO,
             mouse_down: false,
-            skeleton,
+            ik,
         }
     }
 
@@ -208,23 +211,29 @@ impl App {
     }
 
     fn tick(&mut self) {
-        if self.mouse_down {
-            if let Some(mut root) = self.skeleton.get_node_mut(0) {
-                root.pos = self.mouse_pos;
-                root.set_rotation(self.mouse_vector.to_angle());
-            }
-        }
+        // if self.mouse_down {
+        //     if let Some(mut root) = self.skeleton.get_node_mut(0) {
+        //         root.pos = self.mouse_pos;
+        //         root.set_rotation(self.mouse_vector.to_angle());
+        //     }
+        // }
 
-        if let Some(ik) = self.skeleton.get_ik(0) {
-            ik.target = self.mouse_pos;
-        }
+        // if let Some(ik) = self.skeleton.get_ik(0) {
+        //     ik.target = self.mouse_pos;
+        // }
 
-        self.skeleton.tick();
-
-        let circle_instances = self.skeleton.circles();
+        self.ik.target = self.mouse_pos;
+        self.ik.fabrik();
 
         self.renderer
-            .update_pipeline(&mut self.circles, circle_instances.as_slice());
+            .update_pipeline(&mut self.circles, self.ik.circles().as_slice());
+
+        // self.skeleton.tick();
+
+        // let circle_instances = self.skeleton.circles();
+
+        // self.renderer
+        //     .update_pipeline(&mut self.circles, circle_instances.as_slice());
 
         // let mesh_nodes = self.skeleton.triangle_list();
         // let (vertices, indices) = polygon::calculate_strip(&mesh_nodes[0]);
@@ -246,6 +255,8 @@ impl App {
         self.window.request_redraw();
 
         self.text.trim();
+
+        // std::thread::sleep(std::time::Duration::from_millis(2000));
     }
 }
 
